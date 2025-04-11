@@ -7,10 +7,8 @@ from dotenv import load_dotenv
 import pdfplumber
 import pandas as pd
 
-# Cargar las variables del archivo .env
 load_dotenv()
 
-# Crear cliente de OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI()
@@ -18,12 +16,18 @@ app = FastAPI()
 class Pregunta(BaseModel):
     pregunta: str
 
+@app.get("/")
+def bienvenida():
+    return {
+        "mensaje": "👋 ¡Bienvenido a NOVA Bot! Accedé a la interfaz en /docs para probar la API."
+    }
+
 @app.post("/preguntar")
 def preguntar(data: Pregunta):
     try:
         pregunta_usuario = data.pregunta.lower()
 
-        # Leer el PDF
+        # Leer PDF
         texto_pdf = ""
         try:
             with pdfplumber.open("documentos/mujeres_latinoamerica.pdf") as pdf:
@@ -32,7 +36,7 @@ def preguntar(data: Pregunta):
         except Exception as e:
             return {"error": f"Error leyendo el PDF: {e}"}
 
-        # Leer el Excel
+        # Leer Excel
         texto_excel = ""
         try:
             df = pd.read_excel("documentos/mujeres_latinoamerica.xlsx")
@@ -40,7 +44,7 @@ def preguntar(data: Pregunta):
         except Exception as e:
             return {"error": f"Error leyendo el Excel: {e}"}
 
-        # Combinar textos como contexto
+        # Crear contexto
         contexto = f"""
         --- Información del PDF ---
         {texto_pdf}
@@ -49,7 +53,6 @@ def preguntar(data: Pregunta):
         {texto_excel}
         """
 
-        # Prompt para GPT
         prompt = f"""
 Eres NOVA, un asistente profesional. Usa únicamente el siguiente contexto para responder:
 
@@ -59,7 +62,7 @@ Pregunta:
 {pregunta_usuario}
 """
 
-        # Llamada a GPT
+        # Llamada a OpenAI
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
