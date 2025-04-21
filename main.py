@@ -1,25 +1,28 @@
-
 from fastapi import FastAPI
 from pydantic import BaseModel
 from openai import OpenAI
-import os
 from dotenv import load_dotenv
 import pdfplumber
 import pandas as pd
+import os
 
+# Cargar claves desde el archivo .env
 load_dotenv()
 
+# Inicializar cliente OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Inicializar FastAPI
 app = FastAPI()
 
+# Modelo de entrada
 class Pregunta(BaseModel):
     pregunta: str
 
 @app.get("/")
 def bienvenida():
     return {
-        "mensaje": "👋 ¡Bienvenido a NOVA Bot! Accedé a la interfaz en /docs para probar la API."
+        "mensaje": "👋 ¡Bienvenidooo a NOVA Bot! Accedé a la interfaz en /docs para probar la API."
     }
 
 @app.post("/preguntar")
@@ -27,46 +30,59 @@ def preguntar(data: Pregunta):
     try:
         pregunta_usuario = data.pregunta.lower()
 
-        # Leer PDF
+        # Archivos PDF
+        pdf_files = [
+            "documentos/mujeres_latinoamerica.pdf",
+            "documentos/consumosnacks.pdf"
+        ]
+
         texto_pdf = ""
-        try:
-            with pdfplumber.open("documentos/mujeres_latinoamerica.pdf") as pdf:
-                for pagina in pdf.pages:
-                    texto_pdf += pagina.extract_text() + "\n"
-        except Exception as e:
-            return {"error": f"Error leyendo el PDF: {e}"}
+        for archivo in pdf_files:
+            try:
+                with pdfplumber.open(archivo) as pdf:
+                    for pagina in pdf.pages:
+                        texto_pdf += pagina.extract_text() + "\n"
+            except Exception as e:
+                texto_pdf += f"\n[Error leyendo {archivo}: {e}]\n"
 
-        # Leer Excel
+        # Archivos Excel
+        excel_files = [
+            "documentos/mujeres_latinoamerica.xlsx",
+            "documentos/informe_latinoamerica.xlsx"
+        ]
+
         texto_excel = ""
-        try:
-            df = pd.read_excel("documentos/mujeres_latinoamerica.xlsx")
-            texto_excel = df.to_string(index=False)
-        except Exception as e:
-            return {"error": f"Error leyendo el Excel: {e}"}
+        for archivo in excel_files:
+            try:
+                df = pd.read_excel(archivo)
+                texto_excel += df.to_string(index=False) + "\n\n"
+            except Exception as e:
+                texto_excel += f"\n[Error leyendo {archivo}: {e}]\n"
 
-        # Crear contexto
+        # Combinar todo en contexto
         contexto = f"""
-        --- Información del PDF ---
-        {texto_pdf}
+--- CONTEXTO PDF ---
+{texto_pdf}
 
-        --- Tabla del Excel ---
-        {texto_excel}
-        """
+--- CONTEXTO EXCEL ---
+{texto_excel}
+"""
 
+        # Prompt completo para GPT
         prompt = f"""
-Eres NOVA, un asistente profesional. Usa únicamente el siguiente contexto para responder:
+Eres NOVA, un asistente profesional. Usa únicamente el siguiente contexto para responder de forma clara, profesional y amigable. Si no encuentras la información, responde con sinceridad.
 
 {contexto}
 
-Pregunta:
+Pregunta del usuario:
 {pregunta_usuario}
 """
 
-        # Llamada a OpenAI
+        # Llamada a la API de OpenAI
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Eres un asistente profesional que solo responde con base en el contexto dado."},
+                {"role": "system", "content": "Eres NOVA, un asistente profesional que responde solo con el contexto proporcionado."},
                 {"role": "user", "content": prompt}
             ]
         )
