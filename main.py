@@ -22,7 +22,7 @@ class Pregunta(BaseModel):
 @app.get("/")
 def bienvenida():
     return {
-        "mensaje": "👋 ¡Bienvenidooo a NOVA Bot! Accedé a la interfaz en /docs para probar la API."
+        "mensaje": "👋 ¡Bienvenidoooooooooooo a NOVA Bot! Accedé a la interfaz en /docs para probar la API."
     }
 
 @app.post("/preguntar")
