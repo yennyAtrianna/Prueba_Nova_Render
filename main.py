@@ -22,7 +22,7 @@ class Pregunta(BaseModel):
 @app.get("/")
 def bienvenida():
     return {
-        "mensaje": "👋 ¡Bienvenidoooooooooooo a NOVA Bot! Accedé a la interfaz en /docs para probar la API."
+        "mensaje": "👋 ¡Bienvenido a NOVA Bot! Accedé a la interfaz en /docs para probar la API."
     }
 
 @app.post("/preguntar")
@@ -30,55 +30,58 @@ def preguntar(data: Pregunta):
     try:
         pregunta_usuario = data.pregunta.lower()
 
-        # Archivos PDF
-        pdf_files = [
-            "documentos/mujeres_latinoamerica.pdf",
-            "documentos/consumosnacks.pdf"
-        ]
+        # ---------- Lectura de archivos ----------
+        contexto = ""
 
-        texto_pdf = ""
-        for archivo in pdf_files:
+        # Leer archivos PDF con etiquetas
+        pdf_archivos = {
+            "Mujeres latinoamericanas": "documentos/mujeres_latinoamerica.pdf",
+            "Consumo de snacks": "documentos/snacks_latinoamerica_resumen.pdf"
+        }
+
+        for titulo, archivo in pdf_archivos.items():
             try:
                 with pdfplumber.open(archivo) as pdf:
-                    for pagina in pdf.pages:
-                        texto_pdf += pagina.extract_text() + "\n"
+                    texto = "\n".join(p.extract_text() for p in pdf.pages if p.extract_text())
+                    contexto += f"\n### PDF: {titulo}\n{texto}\n"
+                    print(f"✅ PDF leído correctamente: {archivo}")
             except Exception as e:
-                texto_pdf += f"\n[Error leyendo {archivo}: {e}]\n"
+                contexto += f"\n[Error leyendo {archivo}: {e}]\n"
+                print(f"❌ Error leyendo PDF: {archivo} → {e}")
 
-        # Archivos Excel
-        excel_files = [
-            "documentos/mujeres_latinoamerica.xlsx",
-            "documentos/informe_latinoamerica.xlsx"
-        ]
+        # Leer archivos Excel con etiquetas
+        excel_archivos = {
+            "Tabla mujeres latinoamericanas": "documentos/mujeres_latinoamerica.xlsx",
+            "Informe de consumo": "documentos/informe_latinoamerica.xlsx"
+        }
 
-        texto_excel = ""
-        for archivo in excel_files:
+        for titulo, archivo in excel_archivos.items():
             try:
                 df = pd.read_excel(archivo)
-                texto_excel += df.to_string(index=False) + "\n\n"
+                contexto += f"\n### EXCEL: {titulo}\n{df.to_string(index=False)}\n"
+                print(f"✅ Excel leído correctamente: {archivo}")
             except Exception as e:
-                texto_excel += f"\n[Error leyendo {archivo}: {e}]\n"
+                contexto += f"\n[Error leyendo {archivo}: {e}]\n"
+                print(f"❌ Error leyendo Excel: {archivo} → {e}")
 
-        # Combinar todo en contexto
-        contexto = f"""
---- CONTEXTO PDF ---
-{texto_pdf}
+        # 🔍 Mostrar una vista previa del contexto
+        print("📝 CONTEXTO FINAL ENVIADO A GPT:")
+        print(contexto[:1000])
 
---- CONTEXTO EXCEL ---
-{texto_excel}
-"""
-
-        # Prompt completo para GPT
+        # ---------- Prompt para GPT ----------
         prompt = f"""
-Eres NOVA, un asistente profesional. Usa únicamente el siguiente contexto para responder de forma clara, profesional y amigable. Si no encuentras la información, responde con sinceridad.
+Eres NOVA, un asistente profesional. Usa solo el contexto para responder con claridad, amabilidad y precisión.
+Primero detecta de qué trata la pregunta (persona, consumo, cifras, etc.) y luego responde usando el bloque más relevante.
+Si no encuentras la información, di que no está en el contexto.
 
-{contexto}
+--- CONTEXTO ---
+{contexto[:6000]}
 
-Pregunta del usuario:
+--- PREGUNTA ---
 {pregunta_usuario}
 """
 
-        # Llamada a la API de OpenAI
+        # Llamada a GPT
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
