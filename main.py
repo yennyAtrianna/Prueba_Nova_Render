@@ -15,6 +15,9 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Inicializar FastAPI
 app = FastAPI()
 
+# Historial de conversación (simulado en memoria para pruebas locales)
+chat_history = []
+
 # Modelo de entrada
 class Pregunta(BaseModel):
     pregunta: str
@@ -64,33 +67,29 @@ def preguntar(data: Pregunta):
                 contexto += f"\n[Error leyendo {archivo}: {e}]\n"
                 print(f"❌ Error leyendo Excel: {archivo} → {e}")
 
-        # 🔍 Mostrar una vista previa del contexto
+        # Mostrar una vista previa del contexto
         print("📝 CONTEXTO FINAL ENVIADO A GPT:")
         print(contexto[:1000])
 
-        # ---------- Prompt para GPT ----------
-        prompt = f"""
-Eres NOVA, un asistente profesional. Usa solo el contexto para responder con claridad, amabilidad y precisión.
-Primero detecta de qué trata la pregunta (persona, consumo, cifras, etc.) y luego responde usando el bloque más relevante.
-Si no encuentras la información, di que no está en el contexto.
+        # Construcción de mensajes con memoria
+        mensajes = [
+            {"role": "system", "content": "Eres NOVA, un asistente profesional. Solo puedes responder con base en el contexto proporcionado."},
+            {"role": "system", "content": f"Este es el contexto disponible:\n{contexto[:6000]}"}
+        ] + chat_history  # <-- memoria previa
 
---- CONTEXTO ---
-{contexto[:6000]}
+        mensajes.append({"role": "user", "content": pregunta_usuario})  # nueva pregunta
 
---- PREGUNTA ---
-{pregunta_usuario}
-"""
-
-        # Llamada a GPT
+        # Llamada a OpenAI
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "Eres NOVA, un asistente profesional que responde solo con el contexto proporcionado."},
-                {"role": "user", "content": prompt}
-            ]
+            messages=mensajes
         )
 
-        return {"respuesta": response.choices[0].message.content}
+        respuesta_nova = response.choices[0].message.content
+        chat_history.append({"role": "user", "content": pregunta_usuario})
+        chat_history.append({"role": "assistant", "content": respuesta_nova})
+
+        return {"respuesta": respuesta_nova}
 
     except Exception as general_error:
         return {"error": f"Error general: {general_error}"}
